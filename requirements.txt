@@ -1,5 +1,15 @@
+certifi==2020.12.5
+chardet==4.0.0
+docutils==0.17
+idna==2.10
+Kivy==2.0.0
+Kivy-Garden==0.1.4
 numpy==1.20.2
 opencv-python==4.5.1.48
-oscpy==0.5.0
 pkg-resources==0.0.0
-pyrealsense2==2.43.0.3018
+pygame==2.0.1
+pygame-gui==0.5.7
+Pygments==2.8.1
+pyrealsense2==2.44.0.3073
+requests==2.25.1
+urllib3==1.26.4

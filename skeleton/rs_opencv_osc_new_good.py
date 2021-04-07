@@ -1,14 +1,4 @@
 
-# # Connexion au capteur Intel RealSense
-# # Réception des images
-# # Recherche d'un squelette par OpenCV
-# # Calcul de la profonfeur des points
-# # Envoi en osc des positions d'articulations
-# # Affichage des articulations et os dans une fenêtre OpenCV
-# # Enregistrement des datas envoyées dans ./blender_osc/scripts
-# # dans un json nommé avec date/heure
-
-
 import math
 from time import time, sleep
 from json import dumps
@@ -115,26 +105,35 @@ elif MODE == "MPI" :
                     [14,8], [8,9], [9,10], [14,11], [11,12], [12,13] ]
 
 net = cv2.dnn.readNetFromCaffe(protoFile, weightsFile)
+
 if CALC == "cpu":
     net.setPreferableBackend(cv2.dnn.DNN_TARGET_CPU)
     print("Using CPU device")
+
 elif CALC == "gpu":
     net.setPreferableBackend(cv2.dnn.DNN_BACKEND_CUDA)
     net.setPreferableTarget(cv2.dnn.DNN_TARGET_CUDA)
     print("Using GPU device")
+
+
 pipeline = rs.pipeline()
 config = rs.config()
+
 pipeline_wrapper = rs.pipeline_wrapper(pipeline)
 pipeline_profile = config.resolve(pipeline_wrapper)
 device = pipeline_profile.get_device()
 device_product_line = str(device.get_info(rs.camera_info.product_line))
+
 if device_product_line == 'L500':
     config.enable_stream(rs.stream.color, 960, 540, rs.format.bgr8, 30)
 else:
     config.enable_stream(rs.stream.color, 640, 480, rs.format.bgr8, 30)
     config.enable_stream(rs.stream.depth, 640, 480, rs.format.z16, 30)
+
 pipeline.start(config)
+
 align = rs.align(rs.stream.color)
+
 unaligned_frames = pipeline.wait_for_frames()
 frames = align.process(unaligned_frames)
 depth = frames.get_depth_frame()
@@ -142,8 +141,9 @@ depth_intrinsic = depth.profile.as_video_stream_profile().intrinsics
 
 t0 = time()
 n = 0
-
+data = []  # Pour enregistrement d'un json
 cv2.namedWindow('RealSense', cv2.WINDOW_AUTOSIZE)
+
 try:
     while True:
         unaligned_frames = pipeline.wait_for_frames()
@@ -157,10 +157,20 @@ try:
         frame = np.asanyarray(color_frame.get_data())
         frameWidth = frame.shape[1]
         frameHeight = frame.shape[0]
-        inpBlob = cv2.dnn.blobFromImage(frame, scalefactor=SCALE, size=(in_width, in_height),
-                    mean=MEAN, swapRB=True, crop = False, ddepth = cv2.CV_32F)
+        inpBlob = cv2.dnn.blobFromImage(frame,
+                                        scalefactor=SCALE,
+                                        size=(in_width, in_height),
+                                        mean=MEAN,
+                                        swapRB=True,
+                                        crop = False,
+                                        ddepth = cv2.CV_32F)
+
         net.setInput(inpBlob)
+
         output = net.forward()
+
+        H = output.shape[2]
+        W = output.shape[3]
 
         # Pour ajouter tous les points en 2D et 3D, y compris None
         points2D = []
@@ -174,8 +184,8 @@ try:
             minVal, prob, minLoc, point = cv2.minMaxLoc(probMap)
 
             # Scale the point to fit on the original image
-            x = int(((frameWidth * point[0]) / output.shape[3]) + 0.5)
-            y = int(((frameHeight * point[1]) / output.shape[2]) + 0.5)
+            x = int(((frameWidth * point[0]) / W) + 0.5)
+            y = int(((frameHeight * point[1]) / H) + 0.5)
 
             if prob > threshold :  # 0.1
                 points2D.append([x, y])
@@ -217,6 +227,7 @@ try:
             if point:
                 cv2.circle(frame, (point[0], point[1]), 4, (0, 255, 255),
                             thickness=2)
+
 
         # Draw Skeleton
         for pair in POSE_PAIRS:
