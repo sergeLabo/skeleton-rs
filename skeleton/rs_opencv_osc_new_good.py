@@ -11,6 +11,7 @@ from maps import COCO_MAP, MPI_MAP
 
 
 class OscClient:
+
     def __init__(self, **kwargs):
 
         self.ip = kwargs.get('ip', None)
