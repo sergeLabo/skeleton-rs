@@ -1,12 +1,19 @@
 
-# # Connexion au capteur Intel RealSense
-# # Réception des images
-# # Recherche d'un squelette par OpenCV
-# # Calcul de la profonfeur des points
-# # Envoi en osc des positions d'articulations
-# # Affichage des articulations et os dans une fenêtre OpenCV
-# # Enregistrement des datas envoyées dans ./blender_osc/scripts
-# # dans un json nommé avec date/heure
+"""
+ Connexion au capteur Intel RealSense
+ Réception des images
+ Recherche d'un squelette par OpenCV
+ Calcul de la profonfeur des points
+ Envoi en osc des positions d'articulations
+ Affichage des articulations et os dans une fenêtre OpenCV
+ Enregistrement des datas envoyées dans ./blender_osc/scripts
+ dans un json nommé avec date/heure
+
+'threshold', 0.1 : Probabilité de trouver un point
+'kernel', 3 : distance des pixels autour du point pour calcul profondeur
+'mean', 0.3 : Argument de cv2.dnn.blobFromImage
+'median', 0.05 : Utilisé dans le calcul des profondeurs des pixels
+"""
 
 
 import math
@@ -21,10 +28,37 @@ from maps import COCO_MAP, MPI_MAP
 from myconfig import MyConfig
 
 
+class Gestures:
+    """Reconnaissance de:
+        - 1 bras levé
+        - 2 bras levés
+        - 2 bras écartés
+    """
+
+    def __init__(self, client):
+        """ MPI: points3D = [15 * [1,2,3]]"""
+
+        self.client = client
+        # Historique sur hist value
+        self.hist = 50
+        self.histo = []
+
+    def add_points(self, points3D):
+        """Création d'une pile de 50"""
+
+        self.histo.append(points3D)
+        if len(self.histo) > self.hist:
+            del self.histo[0]
+        self.gestures()
+
+    def gestures(self):
+        pass
+
+
 class OscClient:
     def __init__(self, **kwargs):
 
-        self.ip = kwargs.get('ip', None)
+        self.ip = b'localhost'  #kwargs.get('ip', None)
         self.port = kwargs.get('port', None)
         # Pour l'enregistrement d'un json à la fin de la capture
         self.all_data = []
@@ -94,47 +128,54 @@ class SkeletonOpenCV:
 
         self.ip = kwargs.get('ip', '192.168.1.101')
         self.port = kwargs.get('port', 8003)
+
+        self.in_width = kwargs.get('in_width', 640)
+        self.in_height = kwargs.get('in_height', 480)
+
         self.threshold = kwargs.get('threshold', 0.1)
-        self.in_width = kwargs.get('in_width', 184)
-        self.in_height = kwargs.get('in_height', 184)
         self.kernel = kwargs.get('kernel', 3)
         self.mean = kwargs.get('mean', 0.3)
-        self.scale = kwargs.get('scale', 1)
+        self.median = kwargs.get('median', 0.05)
+
         self.mode = kwargs.get('mode', "MPI")
         self.calc = kwargs.get('calc', "cpu")
-        self.median = kwargs.get('median', 0.05)
+
+        # Création du pipeline realsense
+        self.set_pipeline()
 
         # Création du client OSC = OSCClient(b'localhost', 8003)
         kwargs = {'ip': self.ip, 'port': self.port}
         self.osc_client = OscClient(**kwargs)
 
-    def loop(self):
+        # #self.create_trackbar()
+        # #self.set_init_tackbar_position()
 
+    def set_pipeline(self):
         if self.mode == "COCO":
-            protoFile = "pose/coco/pose_deploy_linevec.prototxt"
-            weightsFile = "pose/coco/pose_iter_440000.caffemodel"
-            num_points = 18
-            POSE_PAIRS = [ [1,0],[1,2],[1,5],[2,3],[3,4],[5,6],[6,7],[1,8],[8,9],[9,10],
+            self.protoFile = "pose/coco/pose_deploy_linevec.prototxt"
+            self.weightsFile = "pose/coco/pose_iter_440000.caffemodel"
+            self.num_points = 18
+            self.POSE_PAIRS = [ [1,0],[1,2],[1,5],[2,3],[3,4],[5,6],[6,7],[1,8],[8,9],[9,10],
                                 [1,11],[11,12],[12,13],[0,14],[0,15],[14,16],[15,17]]
 
         elif self.mode == "MPI" :
-            protoFile = "pose/mpi/pose_deploy_linevec_faster_4_stages.prototxt"
-            weightsFile = "pose/mpi/pose_iter_160000.caffemodel"
-            num_points = 15
-            POSE_PAIRS = [[0,1], [1,2], [2,3], [3,4], [1,5], [5,6], [6,7], [1,14],
+            self.protoFile = "pose/mpi/pose_deploy_linevec_faster_4_stages.prototxt"
+            self.weightsFile = "pose/mpi/pose_iter_160000.caffemodel"
+            self.num_points = 15
+            self.POSE_PAIRS = [[0,1], [1,2], [2,3], [3,4], [1,5], [5,6], [6,7], [1,14],
                             [14,8], [8,9], [9,10], [14,11], [11,12], [12,13] ]
 
-        net = cv2.dnn.readNetFromCaffe(protoFile, weightsFile)
+        self.net = cv2.dnn.readNetFromCaffe(self.protoFile, self.weightsFile)
         if self.calc == "cpu":
-            net.setPreferableBackend(cv2.dnn.DNN_TARGET_CPU)
+            self.net.setPreferableBackend(cv2.dnn.DNN_TARGET_CPU)
             print("Using CPU device")
         elif self.calc == "gpu":
-            net.setPreferableBackend(cv2.dnn.DNN_BACKEND_CUDA)
-            net.setPreferableTarget(cv2.dnn.DNN_TARGET_CUDA)
+            self.net.setPreferableBackend(cv2.dnn.DNN_BACKEND_CUDA)
+            self.net.setPreferableTarget(cv2.dnn.DNN_TARGET_CUDA)
             print("Using GPU device")
-        pipeline = rs.pipeline()
+        self.pipeline = rs.pipeline()
         config = rs.config()
-        pipeline_wrapper = rs.pipeline_wrapper(pipeline)
+        pipeline_wrapper = rs.pipeline_wrapper(self.pipeline)
         pipeline_profile = config.resolve(pipeline_wrapper)
         device = pipeline_profile.get_device()
         device_product_line = str(device.get_info(rs.camera_info.product_line))
@@ -143,23 +184,82 @@ class SkeletonOpenCV:
         else:
             config.enable_stream(rs.stream.color, 640, 480, rs.format.bgr8, 30)
             config.enable_stream(rs.stream.depth, 640, 480, rs.format.z16, 30)
-        pipeline.start(config)
-        align = rs.align(rs.stream.color)
-        unaligned_frames = pipeline.wait_for_frames()
-        frames = align.process(unaligned_frames)
+        self.pipeline.start(config)
+        self.align = rs.align(rs.stream.color)
+        unaligned_frames = self.pipeline.wait_for_frames()
+        frames = self.align.process(unaligned_frames)
         depth = frames.get_depth_frame()
-        depth_intrinsic = depth.profile.as_video_stream_profile().intrinsics
+        self.depth_intrinsic = depth.profile.as_video_stream_profile().intrinsics
 
+        # Vérification de la taille des images
+        color_frame = frames.get_color_frame()
+        img = np.asanyarray(color_frame.get_data())
+        print("Vérification de la taille des images:", img.shape[1], "x", img.shape[0])
+
+    def create_trackbar(self):
+        """
+        'threshold', 0.1
+        'kernel', 3 : distance des pixels autour du point pour calcul profondeur
+        'mean', 0.3
+        'median', 0.05 :
+        """
+        cv2.namedWindow('Reglage', cv2.WINDOW_AUTOSIZE)
+        cv2.resizeWindow('Reglage', 400, 20)
+        self.black = np.zeros((400, 20, 3), dtype = "uint8")
+        cv2.createTrackbar('threshold', 'Reglage', 0, 100, self.onChange_threshhold)
+        cv2.createTrackbar('kernel', 'Reglage', 0, 100, self.onChange_kernel)
+        cv2.createTrackbar('mean', 'Reglage', 0, 100, self.onChange_mean)
+        cv2.createTrackbar('median', 'Reglage', 0, 100, self.onChange_median)
+
+    def set_init_tackbar_position(self):
+        """setTrackbarPos(trackbarname, winname, pos) -> None"""
+        cv2.setTrackbarPos('threshold', 'Reglage', 50)  #int(self.threshold/0.002))  # 0.1
+        cv2.setTrackbarPos('kernel', 'Reglage', int(self.kernel/10))  # 3
+        cv2.setTrackbarPos('mean', 'Reglage', int(self.mean/0.006))  # 0.3
+        cv2.setTrackbarPos('median', 'Reglage', int(self.median/0.001))  # 0.05
+
+    def onChange_threshhold(self, value):
+        # threshold = 0.1 0, 100
+        if value == 0: value = 1
+        # 0.1 = 50*k k = 0.1/50=0,002
+        value *= 0.002
+        self.threshhold = value
+
+    def onChange_kernel(self, value):
+        # kernel = 3 0, 100
+        if value == 0: value = 1
+        value = int(value/10)
+        self.kernel = value
+
+    def onChange_mean(self, value):
+        # mean = 0.3 0, 100
+        if value == 0: value = 1
+        # 0.3 = 50*k k = 0.3/50=0,006
+        value *= 0.006
+        self.mean = value
+
+    def onChange_median(self, value):
+        if value == 0: value = 1
+        # 0.05 = 50*k k = 0.05/50=0.001
+        value *= 0.001
+        self.median = value
+
+    def loop(self):
         t0 = time()
         n = 0
 
+        # OpenCV
         cv2.namedWindow('RealSense', cv2.WINDOW_AUTOSIZE)
+        cv2.resizeWindow('RealSense', 640, 480)
+
         try:
             while True:
-                unaligned_frames = pipeline.wait_for_frames()
-                frames = align.process(unaligned_frames)
+                unaligned_frames = self.pipeline.wait_for_frames()
+
+                frames = self.align.process(unaligned_frames)
                 color_frame = frames.get_color_frame()
                 depth_frame = frames.get_depth_frame()
+
                 if not color_frame or not depth_frame:
                     continue
 
@@ -168,23 +268,23 @@ class SkeletonOpenCV:
                 frameWidth = frame.shape[1]
                 frameHeight = frame.shape[0]
                 inpBlob = cv2.dnn.blobFromImage(frame,
-                                                scalefactor=self.scale/255,
+                                                scalefactor=1/255,  # pour calcul de 0 à 1
                                                 size=(  self.in_width,
                                                         self.in_height),
                                                 mean=self.mean,
                                                 swapRB=True,
                                                 crop = False,
                                                 ddepth = cv2.CV_32F)
-                net.setInput(inpBlob)
-                output = net.forward()
+                self.net.setInput(inpBlob)
+                output = self.net.forward()
 
                 # Pour ajouter tous les points en 2D et 3D, y compris None
                 points2D = []
                 points3D = []
 
-                for num_point in range(num_points):
+                for i in range(self.num_points):
                     # confidence map of corresponding body's part.
-                    probMap = output[0, num_point, :, :]
+                    probMap = output[0, i, :, :]
 
                     # Find global maxima of the probMap.
                     minVal, prob, minLoc, point = cv2.minMaxLoc(probMap)
@@ -208,14 +308,13 @@ class SkeletonOpenCV:
 
                         pt = None
                         point_with_deph = None
-                        if median >= 0.05:
-                            # DepthIntrinsics, InputPixelAsFloat, DistanceToTargetInDepthScale)
+                        if median >= self.median:  # 0.05:
                             # Coordonnées du point dans un repère centré sur la caméra
                             # 3D coordinate space with origin = Camera
                             point_with_deph = rs.rs2_deproject_pixel_to_point(
-                                                                    depth_intrinsic,
-                                                                    [x, y],
-                                                                    median)
+                                                            self.depth_intrinsic,
+                                                            [x, y],
+                                                            median)
                         if point_with_deph:
                             points3D.append(point_with_deph)
                         else:
@@ -235,7 +334,7 @@ class SkeletonOpenCV:
                                     thickness=2)
 
                 # Draw Skeleton
-                for pair in POSE_PAIRS:
+                for pair in self.POSE_PAIRS:
                     if points2D[pair[0]] and points2D[pair[1]]:
                         p1 = tuple(points2D[pair[0]])
                         p2 = tuple(points2D[pair[1]])
@@ -243,6 +342,7 @@ class SkeletonOpenCV:
 
                 if frame.any():
                     cv2.imshow('RealSense', frame)
+                # #cv2.imshow('Reglage', self.black)
 
                 n += 1
                 t = time()
@@ -256,7 +356,7 @@ class SkeletonOpenCV:
             cv2.destroyAllWindows()
 
         finally:
-            pipeline.stop()
+            self.pipeline.stop()
 
         sleep(1)
         self.osc_client.save()
@@ -276,18 +376,3 @@ def run():
 
 if __name__ == "__main__":
     run()
-
-
-"""
-ip = kwargs.get('ip', '192.168.1.101')
-port = kwargs.get('port', 8003)
-threshold = kwargs.get('threshold', 0.1)
-in_width = kwargs.get('in_width', 184)
-in_height = kwargs.get('in_height', 184)
-kernel = kwargs.get('kernel', 3)
-mean = kwargs.get('mean', 0.3)
-scale = kwargs.get('scale', 1)
-mode = kwargs.get('mode', "COCO")
-calc = kwargs.get('calc', "cpu")
-median = kwargs.get('median', 0.05)
-"""
