@@ -66,19 +66,20 @@ class Gestures:
         for i in range(15):
             if points3D:
                 if points3D[i]:
-                    new_points[i] = []
-                    valid = True
-                    for j in range(3):
-                        lst = []
-                        for item in self.histo[i][j]:
-                            lst.append(item)
-                        if len(lst) < window_length:
-                            valid = False
-                        else:
-                            sav = savgol_filter(lst, window_length, order)
-                            new_points[i].append(sav[-1])
-                    if not valid:
-                        new_points[i] = None
+                    if self.histo[i]:
+                        new_points[i] = []
+                        valid = True
+                        for j in range(3):
+                            lst = []
+                            for item in self.histo[i][j]:
+                                lst.append(item)
+                            if len(lst) < window_length:
+                                valid = False
+                            else:
+                                sav = savgol_filter(lst, window_length, order)
+                                new_points[i].append(sav[-1])
+                        if not valid:
+                            new_points[i] = None
                 else:
                     new_points[i] = None
             else:
@@ -238,10 +239,11 @@ class SkeletonOpenCV:
 
         self.gest = Gestures(self.osc_client)
 
-        self.slider = 0
+        self.slider = kwargs.get('slider', 1)
         if self.slider:
+            cv2.namedWindow('Reglage', cv2.WINDOW_AUTOSIZE)
+            self.black = np.zeros((20, 600, 3), dtype = "uint8")
             self.create_trackbar()
-            self.set_init_tackbar_position()
 
         self.loop = 1
 
@@ -292,25 +294,17 @@ class SkeletonOpenCV:
         print("Vérification de la taille des images:", img.shape[1], "x", img.shape[0])
 
     def create_trackbar(self):
-        """
-        'threshold', 0.1
-        'kernel', 3 : distance des pixels autour du point pour calcul profondeur
-        'mean', 0.3
-        'median', 0.05
-        """
-        cv2.namedWindow('Reglage', cv2.WINDOW_AUTOSIZE)
-        self.black = np.zeros((20, 600, 3), dtype = "uint8")
-        cv2.createTrackbar('threshold:', 'Reglage', 0, 100, self.onChange_threshhold)
-        cv2.createTrackbar('kernel   :', 'Reglage', 0, 100, self.onChange_kernel)
-        cv2.createTrackbar('mean     :', 'Reglage', 0, 100, self.onChange_mean)
-        cv2.createTrackbar('median   :', 'Reglage', 0, 100, self.onChange_median)
 
-        cv2.createTrackbar('gauche   :', 'Reglage', 0, 200, self.onChange_gauche)
-        cv2.createTrackbar('droite   :', 'Reglage', 0, 200, self.onChange_droite)
-        cv2.createTrackbar('haut     :', 'Reglage', 0, 100, self.onChange_haut)
-        cv2.createTrackbar('bas      :', 'Reglage', 0, 100, self.onChange_bas)
+        cv2.createTrackbar('threshold', 'Reglage', 0, 100, self.onChange_threshold)
+        cv2.createTrackbar('kernel', 'Reglage', 0, 100, self.onChange_kernel)
+        cv2.createTrackbar('mean', 'Reglage', 0, 100, self.onChange_mean)
+        cv2.createTrackbar('median', 'Reglage', 0, 100, self.onChange_median)
 
-    def set_init_tackbar_position(self):
+        cv2.createTrackbar('gauche', 'Reglage', 0, 100, self.onChange_gauche)
+        cv2.createTrackbar('droite', 'Reglage', 0, 100, self.onChange_droite)
+        cv2.createTrackbar('haut', 'Reglage', 0, 100, self.onChange_haut)
+        cv2.createTrackbar('bas', 'Reglage', 0, 100, self.onChange_bas)
+
         cv2.setTrackbarPos('threshold', 'Reglage', int(self.threshold/0.01))  # 0.1
         cv2.setTrackbarPos('kernel', 'Reglage', int(self.kernel*10))  # 3
         cv2.setTrackbarPos('mean', 'Reglage', int(self.mean/0.01))  # 0.3
@@ -333,13 +327,13 @@ class SkeletonOpenCV:
     def onChange_bas(self, value):
         self.bas = int(value)
 
-    def onChange_threshhold(self, value):
+    def onChange_threshold(self, value):
         # threshold = 0.1 à 1 pour  0 à 100
         if value == 0: value = 1
         # 1 si 100
         value *= 0.01
-        print('threshhold:', value)
-        self.threshhold = value
+        print('threshold:', value)
+        self.threshold = value
 
     def onChange_kernel(self, value):
         # kernel = 3 0, 100
@@ -369,7 +363,6 @@ class SkeletonOpenCV:
 
         # OpenCV
         cv2.namedWindow('RealSense', cv2.WINDOW_AUTOSIZE)
-        # #cv2.resizeWindow('RealSense', 640, 480)
 
         while self.loop:
             unaligned_frames = self.pipeline.wait_for_frames()
@@ -381,30 +374,31 @@ class SkeletonOpenCV:
             if not color_frame or not depth_frame:
                 continue
 
-            depth = np.asanyarray(depth_frame.get_data())
+            # #depth = np.asanyarray(depth_frame.get_data())
             frame = np.asanyarray(color_frame.get_data())
-            frameWidth = frame.shape[1]
-            frameHeight = frame.shape[0]
 
             top = time()
-            inpBlob = cv2.dnn.blobFromImage(frame,
+            frame_width = frame.shape[1]
+            frame_height = frame.shape[0]
+            frame_cropped = crop_image(frame, self.gauche, self.droite,
+                                              self.haut, self.bas)
+            inpBlob = cv2.dnn.blobFromImage(frame_cropped,
                                             scalefactor=1/255,  # pour calcul de 0 à 1
-                                            size=(  self.in_width,
-                                                    self.in_height),
+                                            # #size=(  self.in_width,
+                                                    # #self.in_height),
                                             mean=self.mean,
                                             swapRB=True,
                                             crop = False,
                                             ddepth = cv2.CV_32F)
-            # #top = time()
+
             self.net.setInput(inpBlob)
             output = self.net.forward()
-            # #t = time()
-            # #print("fin", round((t - top), 5))  # 0.7 s
+            t = time()
+            print("fin", round((t - top), 5))  # 0.7 s
 
             # Pour ajouter tous les points en 2D et 3D, y compris None
             points2D = []
             points3D = []
-
             for i in range(self.num_points):
                 # confidence map of corresponding body's part.
                 probMap = output[0, i, :, :]
@@ -413,8 +407,8 @@ class SkeletonOpenCV:
                 minVal, prob, minLoc, point = cv2.minMaxLoc(probMap)
 
                 # Scale the point to fit on the original image
-                x = int(((frameWidth * point[0]) / output.shape[3]) + 0.5)
-                y = int(((frameHeight * point[1]) / output.shape[2]) + 0.5)
+                x = int(((frame_width * point[0]) / output.shape[3]) + 0.5)
+                y = int(((frame_height * point[1]) / output.shape[2]) + 0.5)
 
                 if prob > self.threshold :  # 0.1
                     points2D.append([x, y])
@@ -483,6 +477,16 @@ class SkeletonOpenCV:
         sleep(1)
         self.osc_client.save()
 
+
+def crop_image(img, gauche, droite, haut, bas):
+    """Coupe de droite à droite, ...etc
+    Comprendre du coin en haut à gauche au coin en bas à droite
+    """
+    if not isinstance(img, np.ndarray):
+        img = np.array(img)
+    w, h = img.shape[1], img.shape[0]
+
+    return img[haut:h - bas, gauche:w - droite]
 
 def run():
 
