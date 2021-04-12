@@ -471,6 +471,7 @@ class SkeletonOpenCV:
                 if point:
                     cv2.circle(frame, (point[0], point[1]), 4, (0, 255, 255),
                                 thickness=2)
+                    # numéro
                     i = points2D.index(point)
                     x = point[0]
                     y = point[1]
