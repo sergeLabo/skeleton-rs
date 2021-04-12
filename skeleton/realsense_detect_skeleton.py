@@ -71,13 +71,14 @@ class Gestures:
                         valid = True
                         for j in range(3):
                             lst = []
-                            for item in self.histo[i][j]:
-                                lst.append(item)
-                            if len(lst) < window_length:
-                                valid = False
-                            else:
-                                sav = savgol_filter(lst, window_length, order)
-                                new_points[i].append(sav[-1])
+                            if self.histo[i][j]:
+                                for item in self.histo[i][j]:
+                                    lst.append(item)
+                                if len(lst) < window_length:
+                                    valid = False
+                                else:
+                                    sav = savgol_filter(lst, window_length, order)
+                                    new_points[i].append(sav[-1])
                         if not valid:
                             new_points[i] = None
                 else:
@@ -310,16 +311,16 @@ class SkeletonOpenCV:
         cv2.setTrackbarPos('mean', 'Reglage', int(self.mean/0.01))  # 0.3
         cv2.setTrackbarPos('median', 'Reglage', int(self.median/0.01))  # 0.05
 
-        cv2.setTrackbarPos('gauche', 'Reglage', int(self.gauche))
-        cv2.setTrackbarPos('droite', 'Reglage', int(self.droite))
+        cv2.setTrackbarPos('gauche', 'Reglage', int(self.gauche/2))
+        cv2.setTrackbarPos('droite', 'Reglage', int(self.droite/2))
         cv2.setTrackbarPos('haut', 'Reglage', int(self.haut))
         cv2.setTrackbarPos('bas', 'Reglage', int(self.bas))
 
     def onChange_gauche(self, value):
-        self.gauche = int(value)
+        self.gauche = 2*int(value)
 
     def onChange_droite(self, value):
-        self.droite = int(value)
+        self.droite = 2*int(value)
 
     def onChange_haut(self, value):
         self.haut = int(value)
