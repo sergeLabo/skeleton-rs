@@ -395,7 +395,7 @@ class SkeletonOpenCV:
             self.net.setInput(inpBlob)
             output = self.net.forward()
             t = time()
-            print("fin", round((t - top), 5))  # 0.7 s
+            # #print("fin", round((t - top), 5))  # 0.7 s
 
             # Pour ajouter tous les points en 2D et 3D, y compris None
             points2D = []
@@ -410,6 +410,9 @@ class SkeletonOpenCV:
                 # Scale the point to fit on the original image
                 x = int(((frame_width * point[0]) / output.shape[3]) + 0.5)
                 y = int(((frame_height * point[1]) / output.shape[2]) + 0.5)
+                print(frame_width, frame_height, frame_cropped.shape[1],
+                frame_cropped.shape[0], output.shape[3], output.shape[2],
+                x, y)
 
                 if prob > self.threshold :  # 0.1
                     points2D.append([x, y])
