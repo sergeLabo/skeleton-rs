@@ -472,7 +472,9 @@ class SkeletonOpenCV:
                     cv2.circle(frame, (point[0], point[1]), 4, (0, 255, 255),
                                 thickness=2)
                     i = points2D.index(point)
-                    cv2.putText(frameCopy, f"{i}", (int(x), int(y)),
+                    x = point[0]
+                    y = point[1]
+                    cv2.putText(frame, f"{i}", (int(x), int(y)),
                                 cv2.FONT_HERSHEY_SIMPLEX, 1, (0, 0, 255),
                                 2, lineType=cv2.LINE_AA)
             # Draw Skeleton
