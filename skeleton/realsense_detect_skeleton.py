@@ -408,11 +408,13 @@ class SkeletonOpenCV:
                 minVal, prob, minLoc, point = cv2.minMaxLoc(probMap)
 
                 # Scale the point to fit on the original image
+                # + 0.5 pour arrondi scientifique
                 x = int(((frame_width * point[0]) / output.shape[3]) + 0.5)
                 y = int(((frame_height * point[1]) / output.shape[2]) + 0.5)
+
                 print(frame_width, frame_height, frame_cropped.shape[1],
                 frame_cropped.shape[0], output.shape[3], output.shape[2],
-                x, y)
+                point[0], point[1], x, y)
 
                 if prob > self.threshold :  # 0.1
                     points2D.append([x, y])
