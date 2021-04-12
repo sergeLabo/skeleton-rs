@@ -397,6 +397,9 @@ class SkeletonOpenCV:
             t = time()
             # #print("fin", round((t - top), 5))  # 0.7 s
 
+            print(frame_width, frame_height, frame_cropped.shape[1],
+                    frame_cropped.shape[0], output.shape[3], output.shape[2])
+
             # Pour ajouter tous les points en 2D et 3D, y compris None
             points2D = []
             points3D = []
@@ -412,9 +415,21 @@ class SkeletonOpenCV:
                 x = int(((frame_width * point[0]) / output.shape[3]) + 0.5)
                 y = int(((frame_height * point[1]) / output.shape[2]) + 0.5)
 
-                print(frame_width, frame_height, frame_cropped.shape[1],
-                frame_cropped.shape[0], output.shape[3], output.shape[2],
-                point[0], point[1], x, y)
+                # #frame_width 640
+                # #frame_height 480
+                # #frame_cropped.shape[1] 400
+                # #frame_cropped.shape[0] 440
+                # #output.shape[3] 50
+                # #output.shape[2] 55
+                # #point[0] 24
+                # #point[1] 22
+                # #x 307
+                # #y 209
+                # 640 * 24 / 50 = 307
+
+                # #print(frame_width, frame_height, frame_cropped.shape[1],
+                # #frame_cropped.shape[0], output.shape[3], output.shape[2],
+                # #point[0], point[1], x, y)
 
                 if prob > self.threshold :  # 0.1
                     points2D.append([x, y])
@@ -456,7 +471,10 @@ class SkeletonOpenCV:
                 if point:
                     cv2.circle(frame, (point[0], point[1]), 4, (0, 255, 255),
                                 thickness=2)
-
+                    i = points2D.index(point)
+                    cv2.putText(frameCopy, f"{i}", (int(x), int(y)),
+                                cv2.FONT_HERSHEY_SIMPLEX, 1, (0, 0, 255),
+                                2, lineType=cv2.LINE_AA)
             # Draw Skeleton
             for pair in self.POSE_PAIRS:
                 if points2D[pair[0]] and points2D[pair[1]]:
