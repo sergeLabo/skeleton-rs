@@ -20,12 +20,14 @@ import math
 from time import time, sleep
 from json import dumps
 from datetime import datetime
+from collections import deque
+
 import numpy as np
 import cv2
 from scipy.signal import savgol_filter
-
 from oscpy.client import OSCClient
 import pyrealsense2 as rs
+
 from maps import COCO_MAP, MPI_MAP, GESTURES_UP
 from myconfig import MyConfig
 
@@ -37,9 +39,7 @@ class Gestures:
         """ MPI: points3D = [15 * [1,2,3]]"""
 
         self.client = client
-        # Historique sur hist value
-        self.hist = 50
-        self.histo = []
+
         self.depth = 1
         self.mini = 0.8
         self.maxi = 1
@@ -47,50 +47,56 @@ class Gestures:
         # 36 notes possibles
         self.encours = [0] * 36
 
-    def add_points(self, points3D):
-        """Création d'une pile de 50"""
-        # points3D = liste de 15 pour MPI
-        self.histo.append(points3D)
-        if len(self.histo) > self.hist:
-            del self.histo[0]
-            self.points3D = self.get_smooth_points(points3D)
-        else:
-            self.points3D = points3D
+        self.pile_size = 40
+        self.nb_points = 15
+        self.points = None
+
+        pile_size = 40
+        self.piles = []
+        for i in range(self.nb_points):
+            self.piles.append([])
+            for j in range(3):
+                self.piles[i].append(deque(maxlen=pile_size))
+
+        # Filtre
+        self.window_length = 21
+        self.order = 2
+        self.smooth = 1
+
+
+    def add_points(self, points):
+        """points = liste de 15 items, soit [1,2,3] soit None"""
+        # Si pas de points, on passe
+        self.points = points
+        if points:
+            for i in range(self.nb_points):
+                if points[i]:
+                    for j in range(3):  # 3
+                        self.piles[i][j].append(points[i][j])
         self.get_depth_mini_maxi_current()
         self.gestures()
 
-    def get_smooth_points(self, points3D):
-        new_points = [0]*15
-        window_length = 15
-        order = 2
-        for i in range(15):
-            if points3D:
-                if points3D[i]:
-                    if self.histo[i]:
-                        new_points[i] = []
-                        valid = True
-                        for j in range(3):
-                            lst = []
-                            if self.histo[i][j]:
-                                for item in self.histo[i][j]:
-                                    lst.append(item)
-                                if len(lst) < window_length:
-                                    valid = False
-                                else:
-                                    sav = savgol_filter(lst, window_length, order)
-                                    new_points[i].append(sav[-1])
-                        if not valid:
-                            new_points[i] = None
-                else:
-                    new_points[i] = None
-            else:
-                new_points = None
-        return new_points
+    def get_last_smooth_points(self):
+        """Calcul de 15 points lissés, même structure que self.points
+        Si la pile n'est pas remplie, retourne None pour ce point.
+        Ne tiens pas compte de self.points
+        """
+        smooth_points = [0]*self.nb_points
+        for i in range(self.nb_points):
+            smooth_points[i] = []
+            for j in range(3):
+                if len(self.piles[i][j]) == self.pile_size:
+                    three_points_smooth = savgol_filter(list(self.piles[i][j]),
+                                                        self.window_length,
+                                                        self.order)
+                    pt = round(three_points_smooth[-1], 3)
+                    smooth_points[i].append(pt)
+        return smooth_points
 
     def get_depth_mini_maxi_current(self):
         """Moyenne de tous les z"""
         zs = []
-        for point in self.points3D:
+        for point in self.points:
             if point:
                 zs.append(point[2])
         if zs:
@@ -125,7 +131,7 @@ class Gestures:
                 if self.step < 1: self.step = 1
 
     def gestures(self):
-        pts = self.points3D
+        pts = self.points
         for key, val in GESTURES_UP.items():
             note = int(key*self.step)
             p2 = val[0]
@@ -134,7 +140,7 @@ class Gestures:
                 if pts[p2][1] > pts[p1][1] + 0.1:
                     if not self.encours[note]:
                         if 0 < note and note < 36:
-                            print("envoi de", note)
+                            print("Envoi de:", note)
                             self.client.client.send_message(b'/note', [note])
                             self.encours[note] = 1
                 if pts[p2][1] < pts[p1][1] - 0.1:
@@ -240,7 +246,7 @@ class SkeletonOpenCV:
 
         self.gest = Gestures(self.osc_client)
 
-        self.slider = kwargs.get('slider', 1)
+        self.slider = kwargs.get('slider', 0)
         if self.slider:
             cv2.namedWindow('Reglage', cv2.WINDOW_AUTOSIZE)
             self.black = np.zeros((20, 600, 3), dtype = "uint8")
@@ -385,8 +391,8 @@ class SkeletonOpenCV:
                                               self.haut, self.bas)
             inpBlob = cv2.dnn.blobFromImage(frame_cropped,
                                             scalefactor=1/255,  # pour calcul de 0 à 1
-                                            # #size=(  self.in_width,
-                                                    # #self.in_height),
+                                            size=(  self.in_width,
+                                                    self.in_height),
                                             mean=self.mean,
                                             swapRB=True,
                                             crop = False,
@@ -397,8 +403,9 @@ class SkeletonOpenCV:
             t = time()
             # #print("fin", round((t - top), 5))  # 0.7 s
 
-            print(frame_width, frame_height, frame_cropped.shape[1],
-                    frame_cropped.shape[0], output.shape[3], output.shape[2])
+            # 640 480 540 440 68 55
+            # #print(frame_width, frame_height, frame_cropped.shape[1],
+                    # #frame_cropped.shape[0], output.shape[3], output.shape[2])
 
             # Pour ajouter tous les points en 2D et 3D, y compris None
             points2D = []
