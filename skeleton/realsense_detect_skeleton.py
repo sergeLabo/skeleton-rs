@@ -24,7 +24,7 @@ from collections import deque
 
 import numpy as np
 import cv2
-from scipy.signal import savgol_filter
+#from scipy.signal import savgol_filter
 from oscpy.client import OSCClient
 import pyrealsense2 as rs
 
