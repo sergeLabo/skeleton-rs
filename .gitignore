@@ -5,7 +5,8 @@
 # divers
 old/
 mon_env/
-*.caffemodel
+pose/
+*.json
 
 # blend
 *.blend1

@@ -1,0 +1,9 @@
+CPU avec OpenCV                                                                   fps = 1.1  MSI      fps = 1.7
+CPU avec OpenCV et model light                                                    fps = 1.4
+CPU avec OpenCV et body_25                                                        fps = 0.4
+CPU avec OpenVINO                                                                 fps = 1.6
+CPU avec OpenVINO Light                                                           fps = 2.2
+GPU                                                                     GTX1060   fps = 2.5
+GPU et model light                                                      GTX1060   fps = 3.7  MSI      fps = 2.0
+Intel NCS2 Stick Intel® Neural Compute Stick 2 (Intel® NCS2)                      fps = 1.6
+Intel NCS2 Stick Intel® Neural Compute Stick 2 (Intel® NCS2) et model light       fps = 2.0

@@ -57,9 +57,7 @@ class OpenCVSkeleton:
         self.set_pipeline()
 
     def set_dnn(self):
-        """Mode mpi
-        Les xml et bin sont obtenu avec
-        """
+        """Mode mpi. Les xml et bin sont obtenu avec OpenVINO"""
 
         # CaffeModel original
         self.protoFile = "pose/mpi/pose.prototxt"
@@ -68,6 +66,10 @@ class OpenCVSkeleton:
         # CaffeModel original faster dit light
         self.protoFile_light = "pose/MPI_light/pose_deploy_linevec_faster_4_stages.prototxt"
         self.weightsFile_light = "pose/MPI_light/pose_iter_160000.caffemodel"
+
+        # Body 25
+        self.protoFile_body_25 = "pose/body_25/pose_deploy.prototxt"
+        self.weightsFile_body_25 = "pose/body_25/pose_iter_584000.caffemodel"
 
         # OpenVINO
         self.xml = "pose/openvino_mpi/pose.xml"
@@ -90,6 +92,13 @@ class OpenCVSkeleton:
             self.net.setPreferableBackend(cv2.dnn.DNN_BACKEND_OPENCV)
             self.net.setPreferableTarget(cv2.dnn.DNN_TARGET_CPU)
             print("Using CPU device with Light CaffeModel")
+
+        # CPU avec OpenCV et body_25                                                        fps = 0.4
+        elif self.calc == "cpu_body_25":
+            self.net = cv2.dnn.readNetFromCaffe(self.protoFile_body_25, self.weightsFile_body_25)
+            self.net.setPreferableBackend(cv2.dnn.DNN_BACKEND_OPENCV)
+            self.net.setPreferableTarget(cv2.dnn.DNN_TARGET_CPU)
+            print("Using CPU device with body_25")
 
         # CPU avec OpenVINO                                                                 fps = 1.6
         elif self.calc == "openvino_cpu":
@@ -126,7 +135,7 @@ class OpenCVSkeleton:
             self.net.setPreferableTarget(cv2.dnn.DNN_TARGET_MYRIAD)
             print("Using Intel NCS2 Stick device with OpenVINO")
 
-        # Intel NCS2 Stick Intel® Neural Compute Stick 2 (Intel® NCS2)                      fps = 2.0
+        # Intel NCS2 Stick Intel® Neural Compute Stick 2 (Intel® NCS2) et model light       fps = 2.0
         elif self.calc == "ncs2_light":
             self.net = cv2.dnn.readNet(self.xml_light, self.bin_light)
             self.net.setPreferableBackend(cv2.dnn.DNN_BACKEND_INFERENCE_ENGINE)
